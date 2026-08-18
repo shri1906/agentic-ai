@@ -26,12 +26,27 @@ db.exec(`
   );
 
   -- Long-term facts/preferences, independent of any single session.
-  -- e.g. key="preferred_name", value="Friday"
+  -- e.g. key="preferred_name", value="Shivam"
   CREATE TABLE IF NOT EXISTS facts (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  -- Uploaded knowledge-base documents (Phase 3: RAG)
+  CREATE TABLE IF NOT EXISTS documents (
+    id TEXT PRIMARY KEY,
+    filename TEXT NOT NULL,
+    uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS chunks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    content TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_chunks_document ON chunks(document_id);
 
   CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, id);
 `);
@@ -92,4 +107,41 @@ export function getFacts() {
 
 export function deleteFact(key) {
   db.prepare("DELETE FROM facts WHERE key = ?").run(key);
+}
+
+// --- Documents & chunks (Phase 3: RAG) --------------------------------------
+export function addDocument(id, filename) {
+  db.prepare("INSERT INTO documents (id, filename) VALUES (?, ?)").run(id, filename);
+}
+
+export function listDocuments() {
+  return db
+    .prepare(
+      `SELECT d.id, d.filename, d.uploaded_at, COUNT(c.id) AS chunk_count
+       FROM documents d LEFT JOIN chunks c ON c.document_id = d.id
+       GROUP BY d.id ORDER BY d.uploaded_at DESC`
+    )
+    .all();
+}
+
+export function deleteDocument(id) {
+  db.prepare("DELETE FROM documents WHERE id = ?").run(id); // cascades to chunks
+}
+
+export function addChunks(documentId, chunkTexts) {
+  const insert = db.prepare("INSERT INTO chunks (document_id, content) VALUES (?, ?)");
+  const insertMany = db.transaction((texts) => {
+    for (const text of texts) insert.run(documentId, text);
+  });
+  insertMany(chunkTexts);
+}
+
+// Returns every chunk plus its parent document's filename, for search.
+export function getAllChunksWithSource() {
+  return db
+    .prepare(
+      `SELECT c.id, c.content, d.filename
+       FROM chunks c JOIN documents d ON d.id = c.document_id`
+    )
+    .all();
 }

@@ -1,6 +1,10 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import multer from "multer";
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
 import {
   createSession,
@@ -13,9 +17,19 @@ import {
   setFact,
   getFacts,
   deleteFact,
+  addDocument,
+  listDocuments,
+  deleteDocument,
+  addChunks,
 } from "./db.js";
+import { extractText, chunkText, searchChunks } from "./rag.js";
 
 dotenv.config();
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+await fs.mkdir(UPLOAD_DIR, { recursive: true });
+const upload = multer({ dest: UPLOAD_DIR, limits: { fileSize: 20 * 1024 * 1024 } }); // 20MB
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -88,7 +102,46 @@ app.delete("/api/facts/:key", (req, res) => {
   res.status(204).end();
 });
 
-// --- Chat endpoint ---------------------------------------------------
+// --- Documents (Phase 3: RAG knowledge base) --------------------------------
+app.get("/api/documents", (_req, res) => {
+  res.json({ documents: listDocuments() });
+});
+
+app.post("/api/documents", upload.single("file"), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded. Send it as multipart form field 'file'." });
+  }
+
+  try {
+    const text = await extractText(req.file.path, req.file.originalname);
+    const chunks = chunkText(text);
+
+    if (chunks.length === 0) {
+      return res.status(422).json({ error: "Couldn't extract any usable text from that file." });
+    }
+
+    const id = randomUUID();
+    addDocument(id, req.file.originalname);
+    addChunks(id, chunks);
+
+    res.status(201).json({
+      document: { id, filename: req.file.originalname, chunk_count: chunks.length },
+    });
+  } catch (err) {
+    console.error("[friday-ai] Document processing failed:", err);
+    res.status(500).json({ error: err.message || "Failed to process the uploaded document." });
+  } finally {
+    // We only ever keep extracted text/chunks in the DB, not the raw file.
+    fs.unlink(req.file.path).catch(() => {});
+  }
+});
+
+app.delete("/api/documents/:id", (req, res) => {
+  deleteDocument(req.params.id);
+  res.status(204).end();
+});
+
+
 // Expects: { sessionId: string, message: string }
 // Persists both the user message and the assistant reply, and grounds
 // the model in the full session history plus any stored long-term facts.
@@ -118,9 +171,22 @@ app.post("/api/chat", async (req, res) => {
     ? `Known long-term facts about the user:\n${facts.map((f) => `- ${f.key}: ${f.value}`).join("\n")}`
     : "";
 
+  const relevantChunks = searchChunks(message, 4);
+  const docsBlock = relevantChunks.length
+    ? "Relevant excerpts from the user's uploaded documents (cite the filename when you use one):\n\n" +
+      relevantChunks
+        .map((c) => `[${c.filename}]\n${c.content}`)
+        .join("\n\n---\n\n")
+    : "";
+
   const systemPrompt = {
     role: "system",
-    content: ["You are Friday AI, a helpful, concise personal assistant.", factsBlock]
+    content: [
+      "You are Friday AI, a helpful, concise personal assistant.",
+      "If the user's uploaded documents contain the answer, prefer that over general knowledge and say which file it came from. If they don't, answer normally and say so.",
+      factsBlock,
+      docsBlock,
+    ]
       .filter(Boolean)
       .join("\n\n"),
   };
