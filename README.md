@@ -1,21 +1,23 @@
-# Shivam AI — Phase 1+2: Chat UI + API Backend + Memory
+# Friday AI — Phase 1+2+3: Chat UI + Memory + RAG
 
 A ChatGPT-style chat app: React frontend + Node/Express backend that
-proxies to your LLM provider, now with persistent memory via SQLite —
-conversations survive restarts and are organized into browsable sessions.
+proxies to your LLM provider, with persistent memory (SQLite) and a
+document knowledge base (RAG) — upload PDFs, Word docs, spreadsheets,
+or text files, and the assistant searches them before answering.
 
 ## Structure
 
 ```
-shivam-ai/
+Friday-ai/
 ├── backend/
-│   ├── server.js        # Express API: /api/chat, /api/sessions, /api/facts
-│   ├── db.js             # SQLite schema + queries (sessions, messages, facts)
+│   ├── server.js        # Express API: chat, sessions, facts, documents
+│   ├── db.js             # SQLite schema + queries
+│   ├── rag.js             # Text extraction, chunking, BM25 search
 │   ├── package.json
 │   └── .env.example
 └── frontend/
     ├── src/
-    │   ├── App.jsx       # Chat UI with session sidebar
+    │   ├── App.jsx       # Chat UI: sessions sidebar + documents panel
     │   ├── App.css
     │   ├── index.css
     │   └── main.jsx
@@ -25,23 +27,24 @@ shivam-ai/
     └── .env.example
 ```
 
-## What's new in Phase 2
+## What's new in Phase 3
 
-- **Sessions**: every conversation is a row in SQLite (`backend/shivam-ai.db`,
-  created automatically on first run). The sidebar lists them, lets you
-  switch between them, and delete ones you don't need.
-- **Persistent history**: messages are saved to disk as they're sent —
-  restart the backend and your conversations are still there.
-- **Long-term facts**: `POST /api/facts` with `{ "key": "...", "value": "..." }`
-  stores a fact (e.g. `preferred_name: Shivam`) that gets injected into
-  every future conversation's system prompt, regardless of session. Try:
-  ```bash
-  curl -X POST http://localhost:5000/api/facts \
-    -H "Content-Type: application/json" \
-    -d '{"key":"preferred_name","value":"Shivam"}'
-  ```
-  There's no UI for facts yet — that's a good next small addition, or we
-  can fold it into Phase 3 alongside document memory (RAG).
+- **Upload documents**: PDF, DOCX, XLSX/XLS/CSV, TXT, or MD via the
+  sidebar's "+ upload" button (or `POST /api/documents`, multipart field
+  `file`). Text is extracted and split into overlapping chunks.
+- **Retrieval before answering**: every chat message searches the
+  uploaded chunks and, if any are relevant, injects the best matches into
+  the system prompt with their source filename. The model is instructed
+  to prefer document content over general knowledge when it's there, and
+  to say which file it came from.
+- **No embedding API required**: search uses a local BM25 lexical ranking
+  (`backend/rag.js`) computed entirely in Node — no extra API key or cost,
+  works fine offline. It's a good match for a personal knowledge base;
+  if you outgrow lexical search (e.g. you need semantic matching across
+  paraphrases), the natural upgrade is swapping `searchChunks` for a
+  vector-embedding + cosine-similarity search using your LLM provider's
+  embeddings endpoint.
+- Manage documents from the sidebar, or `GET/DELETE /api/documents/:id`.
 
 ## 1. Backend setup
 
@@ -89,13 +92,13 @@ Opens on `http://localhost:5173`. It talks to the backend over
 - The backend uses the OpenAI-compatible request/response shape. If you use
   a provider with a different shape (e.g. Anthropic's Messages API), adjust
   the `fetch` call and response parsing in `backend/server.js`.
-- `backend/shivam-ai.db` is created automatically on first run. Delete it
-  to wipe all history and start fresh. It's gitignored by default.
+- `backend/Friday-ai.db` is created automatically on first run. Delete it
+  to wipe all history, facts, and documents and start fresh. It's
+  gitignored by default. Uploaded files are deleted from disk right after
+  their text is extracted — only the extracted chunks are kept in SQLite.
 
 ## Next phases (from the original roadmap)
 
-- **Phase 3 — RAG**: upload PDFs/Word/Excel, embed and search them before
-  answering.
 - **Phase 4 — Tools**: let the assistant call functions (SQL queries, log
   reads, report generation) via tool-calling.
 - **Phase 5 — Web search**: add a search tool for current information.

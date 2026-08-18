@@ -210,14 +210,14 @@ export default function App() {
       <div className="shell">
         <header className="topbar">
           <span className={`status-dot${busy ? " busy" : ""}`} />
-          <span className="topbar-title">shivam@ai:~</span>
+          <span className="topbar-title">friday@ai:~</span>
           <span className="topbar-sub">phase 3 · rag</span>
         </header>
 
         <main className="log" ref={logRef}>
           {messages.length === 0 && (
             <div className="log-empty">
-              <div className="big">Shivam AI</div>
+              <div className="big">friday AI</div>
               type a message below to start a session.
               <br />
               history now persists across restarts.
@@ -226,14 +226,14 @@ export default function App() {
 
           {messages.map((m, i) => (
             <div key={i} className={`msg ${m.role}`}>
-              <span className="msg-role">{m.role === "user" ? "you" : "shivam"}</span>
+              <span className="msg-role">{m.role === "user" ? "you" : "friday"}</span>
               <div className="msg-bubble">{m.content}</div>
             </div>
           ))}
 
           {busy && (
             <div className="msg assistant">
-              <span className="msg-role">shivam</span>
+              <span className="msg-role">friday</span>
               <div className="msg-bubble">
                 thinking<span className="cursor" />
               </div>
@@ -253,7 +253,7 @@ export default function App() {
           <textarea
             rows={1}
             value={input}
-            placeholder="Ask Shivam AI anything..."
+            placeholder="Ask friday AI anything..."
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={busy}
