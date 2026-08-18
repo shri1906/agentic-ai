@@ -98,6 +98,81 @@
   padding: 10px;
 }
 
+/* Documents panel (Phase 3: RAG) */
+.docs-panel {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 40%;
+}
+
+.docs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-transform: lowercase;
+}
+
+.docs-upload-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--accent-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.docs-upload-btn:hover:not(:disabled) {
+  border-color: var(--accent-2);
+}
+
+.docs-upload-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.docs-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.doc-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.doc-item:hover {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.doc-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-item:hover .session-delete {
+  opacity: 1;
+}
+
 .shell {
   height: 100vh;
   flex: 1;

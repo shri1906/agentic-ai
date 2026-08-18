@@ -10,11 +10,15 @@ export default function App() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [documents, setDocuments] = useState([]);
+  const [uploading, setUploading] = useState(false);
   const logRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  // Load session list on mount.
+  // Load session list + documents on mount.
   useEffect(() => {
     refreshSessions();
+    refreshDocuments();
   }, []);
 
   // Load messages whenever the active session changes.
@@ -60,6 +64,45 @@ export default function App() {
     await fetch(`${API_BASE}/api/sessions/${id}`, { method: "DELETE" });
     if (activeId === id) setActiveId(null);
     refreshSessions();
+  }
+
+  async function refreshDocuments() {
+    try {
+      const res = await fetch(`${API_BASE}/api/documents`);
+      const data = await res.json();
+      setDocuments(data.documents || []);
+    } catch {
+      // silent — the sidebar just stays empty; the main error banner
+      // already covers "backend unreachable"
+    }
+  }
+
+  async function uploadFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+
+    const form = new FormData();
+    form.append("file", file);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/documents`, { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed.");
+      await refreshDocuments();
+    } catch (err) {
+      setError(err.message || "Couldn't upload that file.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function removeDocument(id, e) {
+    e.stopPropagation();
+    await fetch(`${API_BASE}/api/documents/${id}`, { method: "DELETE" });
+    refreshDocuments();
   }
 
   async function send() {
@@ -130,19 +173,51 @@ export default function App() {
           ))}
           {sessions.length === 0 && <div className="session-empty">no sessions yet</div>}
         </div>
+
+        <div className="docs-panel">
+          <div className="docs-header">
+            <span>knowledge base</span>
+            <button
+              className="docs-upload-btn"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              title="Upload a document"
+            >
+              {uploading ? "..." : "+ upload"}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md"
+              onChange={uploadFile}
+              style={{ display: "none" }}
+            />
+          </div>
+          <div className="docs-list">
+            {documents.map((d) => (
+              <div key={d.id} className="doc-item" title={`${d.chunk_count} chunk(s)`}>
+                <span className="doc-name">{d.filename}</span>
+                <button className="session-delete" onClick={(e) => removeDocument(d.id, e)} title="Delete">
+                  ×
+                </button>
+              </div>
+            ))}
+            {documents.length === 0 && <div className="session-empty">no documents yet</div>}
+          </div>
+        </div>
       </aside>
 
       <div className="shell">
         <header className="topbar">
           <span className={`status-dot${busy ? " busy" : ""}`} />
-          <span className="topbar-title">friday@ai:~</span>
-          <span className="topbar-sub">phase 2 · memory</span>
+          <span className="topbar-title">shivam@ai:~</span>
+          <span className="topbar-sub">phase 3 · rag</span>
         </header>
 
         <main className="log" ref={logRef}>
           {messages.length === 0 && (
             <div className="log-empty">
-              <div className="big">Friday AI</div>
+              <div className="big">Shivam AI</div>
               type a message below to start a session.
               <br />
               history now persists across restarts.
@@ -151,14 +226,14 @@ export default function App() {
 
           {messages.map((m, i) => (
             <div key={i} className={`msg ${m.role}`}>
-              <span className="msg-role">{m.role === "user" ? "you" : "friday"}</span>
+              <span className="msg-role">{m.role === "user" ? "you" : "shivam"}</span>
               <div className="msg-bubble">{m.content}</div>
             </div>
           ))}
 
           {busy && (
             <div className="msg assistant">
-              <span className="msg-role">friday</span>
+              <span className="msg-role">shivam</span>
               <div className="msg-bubble">
                 thinking<span className="cursor" />
               </div>
@@ -178,7 +253,7 @@ export default function App() {
           <textarea
             rows={1}
             value={input}
-            placeholder="Ask friday AI anything..."
+            placeholder="Ask Shivam AI anything..."
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={busy}
