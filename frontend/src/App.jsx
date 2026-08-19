@@ -242,7 +242,7 @@ export default function App() {
           </button>
           <span className={`status-dot${busy ? " busy" : ""}`} />
           <span className="topbar-title">Friday Ai</span>
-          <span className="topbar-sub">Shivam maurya</span>
+          <span className="topbar-sub"></span>
           <button
             className="icon-btn theme-btn"
             onClick={toggleTheme}
