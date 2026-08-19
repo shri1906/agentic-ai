@@ -34,6 +34,10 @@ function isDbConfigured() {
   return Boolean(process.env.DB_HOST && process.env.DB_USER && process.env.DB_NAME);
 }
 
+function isWebSearchConfigured() {
+  return Boolean(process.env.TAVILY_API_KEY);
+}
+
 // --- Tool schemas (OpenAI-compatible function-calling format) --------------
 export function getToolDefinitions() {
   const tools = [
@@ -110,6 +114,24 @@ export function getToolDefinitions() {
     });
   }
 
+  if (isWebSearchConfigured()) {
+    tools.push({
+      type: "function",
+      function: {
+        name: "web_search",
+        description:
+          "Search the live web for current information — news, prices, recent events, anything that could have changed since your training data or that you're unsure about. Use this instead of guessing when the user asks about something time-sensitive or current.",
+        parameters: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "A short, specific search query, e.g. 'current USD to INR exchange rate'." },
+          },
+          required: ["query"],
+        },
+      },
+    });
+  }
+
   return tools;
 }
 
@@ -160,6 +182,44 @@ export async function executeTool(name, args) {
         return { rows };
       } catch (err) {
         return { error: `Query failed: ${err.message}` };
+      }
+    }
+
+    case "web_search": {
+      if (!isWebSearchConfigured()) {
+        return { error: "Web search isn't configured. Set TAVILY_API_KEY in backend/.env." };
+      }
+      const query = String(args.query || "").trim();
+      if (!query) return { error: "A search query is required." };
+
+      try {
+        const res = await fetch("https://api.tavily.com/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            api_key: process.env.TAVILY_API_KEY,
+            query,
+            max_results: 5,
+            include_answer: true,
+          }),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          return { error: `Search provider returned an error: ${res.status} ${errText}` };
+        }
+
+        const data = await res.json();
+        return {
+          answer: data.answer || null,
+          results: (data.results || []).map((r) => ({
+            title: r.title,
+            url: r.url,
+            snippet: r.content,
+          })),
+        };
+      } catch (err) {
+        return { error: `Web search failed: ${err.message}` };
       }
     }
 

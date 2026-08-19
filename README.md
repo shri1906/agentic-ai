@@ -1,15 +1,14 @@
-# Shivam AI — Phase 1+2+3+4: Chat, Memory, RAG, and Tools
+# friday AI — Phases 1–5: Chat, Memory, RAG, Tools, and Web Search
 
 A ChatGPT-style chat app: React frontend + Node/Express backend that
 proxies to your LLM provider, with persistent memory (SQLite), a document
-knowledge base (RAG), and now tool-calling — the assistant can do math,
-check the date, save facts about you, search your documents, and (if you
-configure it) run read-only SQL queries against your own database.
+knowledge base (RAG), tool-calling (math, facts, your DB), and now live
+web search for anything current or time-sensitive.
 
 ## Structure
 
 ```
-shivam-ai/
+friday-ai/
 ├── backend/
 │   ├── server.js        # Express API: chat (with tool loop), sessions, facts, documents
 │   ├── db.js             # SQLite schema + queries
@@ -28,33 +27,6 @@ shivam-ai/
     ├── vite.config.js
     └── .env.example
 ```
-
-## What's new in Phase 4
-
-The assistant becomes an agent: it can decide mid-conversation to call a
-function, get the result back, and use it to answer. This uses standard
-OpenAI-compatible function-calling (`tools` + `tool_choice: "auto"` in the
-chat-completions request) — your provider's model needs to support it.
-Groq's `llama-3.3-70b-versatile` (the default in `.env.example`) does.
-
-**Built-in tools** (`backend/tools.js`):
-- `calculate` — arithmetic via `mathjs`'s expression evaluator (no `eval`,
-  so it's safe against code injection)
-- `get_current_datetime`
-- `remember_fact` — same long-term memory store as `/api/facts`, but the
-  model can write to it itself mid-conversation (e.g. "call me Raj from
-  now on")
-- `search_documents` — an explicit, targeted version of the automatic RAG
-  search from Phase 3
-- `query_database` — **only appears if you configure `DB_HOST` / `DB_USER`
-  / `DB_PASSWORD` / `DB_NAME`** in `.env` (see the commented block at the
-  bottom of `.env.example`). It's hard-restricted to single `SELECT`
-  statements, auto-capped at `LIMIT 200`, and rejects anything with a
-  second statement.
-
-Each assistant message that used a tool shows a small `used: calculate`
-tag under it in the UI so you can see what actually happened.
-
 ### A deliberate omission: no shell/command-execution tool
 
 There's no generic "run a shell command", "restart a service", or
@@ -130,18 +102,40 @@ Opens on `http://localhost:5173`. It talks to the backend over
 - The backend uses the OpenAI-compatible request/response shape. If you use
   a provider with a different shape (e.g. Anthropic's Messages API), adjust
   the `fetch` call and response parsing in `backend/server.js`.
-- `backend/shivam-ai.db` is created automatically on first run. Delete it
+- `backend/friday-ai.db` is created automatically on first run. Delete it
   to wipe all history, facts, and documents and start fresh. It's
   gitignored by default. Uploaded files are deleted from disk right after
   their text is extracted — only the extracted chunks are kept in SQLite.
 
-## Next phase (from the original roadmap)
+## UI: responsive layout + theme toggle
 
-- **Phase 5 — Web search**: add a search tool for current information.
-  This slots in as one more entry in `getToolDefinitions()` /
-  `executeTool()` — same pattern as everything in Phase 4.
+- **Theme toggle**: sun/moon icon button in the top bar switches between the
+  dark terminal theme and a light variant. The choice is saved to
+  `localStorage` (`friday-ai-theme`) and re-applied instantly on reload via
+  a small inline script in `index.html`, so there's no flash of the wrong
+  theme on load.
+- **Responsive**: below 768px, the sidebar (sessions + knowledge base)
+  becomes a slide-in drawer opened with the hamburger icon in the top bar,
+  with a tap-to-dismiss backdrop. Message bubbles, the composer, and font
+  sizes all adjust for narrow screens; the chat input uses 16px font on
+  mobile specifically to stop iOS Safari from auto-zooming on focus.
 
-Say the word and we'll build it.
+## Roadmap status
+
+All five phases from the original plan are now built:
+1. ✅ Chat UI + API backend
+2. ✅ Long-term memory (SQLite sessions + facts)
+3. ✅ RAG (uploaded document search)
+4. ✅ Tool-calling (math, facts, optional DB queries)
+5. ✅ Web search
+
+From here, natural next steps if you want to keep going:
+- A UI for managing facts (currently curl/tool-only)
+- Auth, so this isn't wide open on your network
+- Streaming responses instead of waiting for the full reply
+- Swapping BM25 for embedding-based search if lexical matching starts
+  missing paraphrased queries in your documents
+- Deploying it (see the IIS section below)
 
 ## Deploying behind IIS
 
