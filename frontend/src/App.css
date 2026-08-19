@@ -191,6 +191,34 @@
   background: var(--surface);
 }
 
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.icon-btn:hover {
+  color: var(--text);
+  border-color: var(--accent-2);
+}
+
+.menu-btn {
+  display: none;
+}
+
+.theme-btn {
+  margin-left: 4px;
+}
+
 .status-dot {
   width: 8px;
   height: 8px;
@@ -381,4 +409,87 @@
 
 .composer button:not(:disabled):hover {
   opacity: 0.88;
+}
+
+/* Mobile drawer backdrop */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 20;
+}
+
+/* --- Responsive: sidebar becomes a slide-in drawer below 768px --- */
+@media (max-width: 768px) {
+  .menu-btn {
+    display: inline-flex;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(82vw, 300px);
+    z-index: 21;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: 2px 0 16px rgba(0, 0, 0, 0.25);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .topbar {
+    padding: 12px 14px;
+    gap: 8px;
+  }
+
+  .topbar-title {
+    font-size: 13px;
+  }
+
+  .topbar-sub {
+    display: none;
+  }
+
+  .log {
+    padding: 16px 14px;
+    gap: 16px;
+  }
+
+  .msg {
+    max-width: 94%;
+  }
+
+  .msg-bubble {
+    font-size: 14.5px;
+    padding: 10px 12px;
+  }
+
+  .composer {
+    padding: 10px 12px 14px;
+    gap: 8px;
+  }
+
+  .composer textarea {
+    font-size: 16px; /* prevents iOS Safari auto-zoom on focus */
+    padding: 10px 12px;
+  }
+
+  .composer button {
+    padding: 10px 14px;
+  }
+
+  .log-empty .big {
+    font-size: 19px;
+  }
+}
+
+@media (max-width: 420px) {
+  .composer button {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
 }

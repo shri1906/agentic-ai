@@ -12,6 +12,18 @@
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
+[data-theme="light"] {
+  --bg: #f5f4f1;
+  --surface: #ffffff;
+  --surface-raised: #ececea;
+  --border: #dcdad5;
+  --text: #1c1c1a;
+  --text-muted: #6b6963;
+  --accent: #d9531e;
+  --accent-dim: #d9531e22;
+  --accent-2: #0f8a78;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -28,6 +40,7 @@ body {
   color: var(--text);
   font-family: var(--font-display);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 ::selection {

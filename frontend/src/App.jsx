@@ -12,8 +12,20 @@ export default function App() {
   const [error, setError] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem("Friday-ai-theme") || "dark");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const logRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Apply + persist theme.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("Friday-ai-theme", theme);
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme((t) => (t === "dark" ? "light" : "dark"));
+  }
 
   // Load session list + documents on mount.
   useEffect(() => {
@@ -57,6 +69,7 @@ export default function App() {
     });
     const data = await res.json();
     await refreshSessions(data.session.id);
+    setSidebarOpen(false);
   }
 
   async function removeSession(id, e) {
@@ -157,7 +170,9 @@ export default function App() {
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      {sidebarOpen && <div className="backdrop" onClick={() => setSidebarOpen(false)} />}
+
+      <aside className={`sidebar${sidebarOpen ? " open" : ""}`}>
         <button className="new-chat" onClick={newSession}>
           + new session
         </button>
@@ -166,7 +181,10 @@ export default function App() {
             <div
               key={s.id}
               className={`session-item${s.id === activeId ? " active" : ""}`}
-              onClick={() => setActiveId(s.id)}
+              onClick={() => {
+                setActiveId(s.id);
+                setSidebarOpen(false);
+              }}
             >
               <span className="session-title">{s.title}</span>
               <button className="session-delete" onClick={(e) => removeSession(s.id, e)} title="Delete">
@@ -212,9 +230,35 @@ export default function App() {
 
       <div className="shell">
         <header className="topbar">
+          <button
+            className="icon-btn menu-btn"
+            onClick={() => setSidebarOpen((v) => !v)}
+            aria-label="Toggle sidebar"
+            title="Sessions & documents"
+          >
+            <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6">
+              <path d="M2.5 5h15M2.5 10h15M2.5 15h15" strokeLinecap="round" />
+            </svg>
+          </button>
           <span className={`status-dot${busy ? " busy" : ""}`} />
-          <span className="topbar-title">Friday@ai:~</span>
-          <span className="topbar-sub">phase 4 · tools</span>
+          <span className="topbar-title">Friday Ai</span>
+          <span className="topbar-sub">Shivam maurya</span>
+          <button
+            className="icon-btn theme-btn"
+            onClick={toggleTheme}
+            aria-label="Toggle theme"
+            title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          >
+            {theme === "dark" ? (
+              <svg viewBox="0 0 20 20" width="15" height="15" fill="currentColor">
+                <path d="M10 2.5a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 2.5zm0 12a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 14.5zm7.5-4.5a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5a.75.75 0 01.75.75zm-12 0a.75.75 0 01-.75.75H3.25a.75.75 0 010-1.5h1.5a.75.75 0 01.75.75zm9.02-5.27a.75.75 0 010 1.06l-1.06 1.06a.75.75 0 11-1.06-1.06l1.06-1.06a.75.75 0 011.06 0zm-9.5 9.5a.75.75 0 010 1.06L3.94 15.8a.75.75 0 11-1.06-1.06l1.06-1.06a.75.75 0 011.06 0zm9.5 1.06a.75.75 0 01-1.06 0l-1.06-1.06a.75.75 0 111.06-1.06l1.06 1.06a.75.75 0 010 1.06zm-9.5-9.5a.75.75 0 01-1.06 0L3.94 4.24a.75.75 0 111.06-1.06l1.06 1.06a.75.75 0 010 1.06zM10 6.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 20 20" width="15" height="15" fill="currentColor">
+                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+              </svg>
+            )}
+          </button>
         </header>
 
         <main className="log" ref={logRef}>
