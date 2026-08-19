@@ -1,21 +1,25 @@
-# Shivam AI — Phase 1+2: Chat UI + API Backend + Memory
+# Shivam AI — Phase 1+2+3+4: Chat, Memory, RAG, and Tools
 
 A ChatGPT-style chat app: React frontend + Node/Express backend that
-proxies to your LLM provider, now with persistent memory via SQLite —
-conversations survive restarts and are organized into browsable sessions.
+proxies to your LLM provider, with persistent memory (SQLite), a document
+knowledge base (RAG), and now tool-calling — the assistant can do math,
+check the date, save facts about you, search your documents, and (if you
+configure it) run read-only SQL queries against your own database.
 
 ## Structure
 
 ```
 shivam-ai/
 ├── backend/
-│   ├── server.js        # Express API: /api/chat, /api/sessions, /api/facts
-│   ├── db.js             # SQLite schema + queries (sessions, messages, facts)
+│   ├── server.js        # Express API: chat (with tool loop), sessions, facts, documents
+│   ├── db.js             # SQLite schema + queries
+│   ├── rag.js             # Text extraction, chunking, BM25 search
+│   ├── tools.js           # Tool definitions + execution (Phase 4)
 │   ├── package.json
 │   └── .env.example
 └── frontend/
     ├── src/
-    │   ├── App.jsx       # Chat UI with session sidebar
+    │   ├── App.jsx       # Chat UI: sessions sidebar + documents panel + tool tags
     │   ├── App.css
     │   ├── index.css
     │   └── main.jsx
@@ -25,23 +29,60 @@ shivam-ai/
     └── .env.example
 ```
 
-## What's new in Phase 2
+## What's new in Phase 4
 
-- **Sessions**: every conversation is a row in SQLite (`backend/shivam-ai.db`,
-  created automatically on first run). The sidebar lists them, lets you
-  switch between them, and delete ones you don't need.
-- **Persistent history**: messages are saved to disk as they're sent —
-  restart the backend and your conversations are still there.
-- **Long-term facts**: `POST /api/facts` with `{ "key": "...", "value": "..." }`
-  stores a fact (e.g. `preferred_name: Shivam`) that gets injected into
-  every future conversation's system prompt, regardless of session. Try:
-  ```bash
-  curl -X POST http://localhost:5000/api/facts \
-    -H "Content-Type: application/json" \
-    -d '{"key":"preferred_name","value":"Shivam"}'
-  ```
-  There's no UI for facts yet — that's a good next small addition, or we
-  can fold it into Phase 3 alongside document memory (RAG).
+The assistant becomes an agent: it can decide mid-conversation to call a
+function, get the result back, and use it to answer. This uses standard
+OpenAI-compatible function-calling (`tools` + `tool_choice: "auto"` in the
+chat-completions request) — your provider's model needs to support it.
+Groq's `llama-3.3-70b-versatile` (the default in `.env.example`) does.
+
+**Built-in tools** (`backend/tools.js`):
+- `calculate` — arithmetic via `mathjs`'s expression evaluator (no `eval`,
+  so it's safe against code injection)
+- `get_current_datetime`
+- `remember_fact` — same long-term memory store as `/api/facts`, but the
+  model can write to it itself mid-conversation (e.g. "call me Raj from
+  now on")
+- `search_documents` — an explicit, targeted version of the automatic RAG
+  search from Phase 3
+- `query_database` — **only appears if you configure `DB_HOST` / `DB_USER`
+  / `DB_PASSWORD` / `DB_NAME`** in `.env` (see the commented block at the
+  bottom of `.env.example`). It's hard-restricted to single `SELECT`
+  statements, auto-capped at `LIMIT 200`, and rejects anything with a
+  second statement.
+
+Each assistant message that used a tool shows a small `used: calculate`
+tag under it in the UI so you can see what actually happened.
+
+### A deliberate omission: no shell/command-execution tool
+
+There's no generic "run a shell command", "restart a service", or
+"execute PowerShell" tool here, even though the original roadmap
+mentioned that kind of automation. Handing an LLM agent unrestricted
+command execution is a genuine security risk — a malicious or just
+poorly-worded instruction hidden in a document you upload, or in the
+conversation itself, could get it to run something destructive. If you
+want that kind of capability:
+- Build **one narrow, explicitly-whitelisted tool per action** (e.g.
+  `restart_web_service` that always runs one fixed, audited command with
+  no user-controlled arguments), never a free-form executor.
+- Log every invocation.
+- Consider requiring a human confirmation step before anything with
+  side effects actually runs.
+
+## How the tool loop works
+
+1. `/api/chat` sends the conversation to your LLM along with the tool
+   definitions.
+2. If the model responds with `tool_calls` instead of a plain answer, the
+   backend executes each one locally via `executeTool()`, appends the
+   results as `role: "tool"` messages, and calls the model again.
+3. This repeats (capped at 5 rounds) until the model returns a normal
+   text answer, which is what gets saved to the conversation and shown
+   to you. The intermediate tool-calling exchange itself isn't persisted
+   to SQLite — only the user's message and the final answer are, to keep
+   the stored history clean and provider-agnostic.
 
 ## 1. Backend setup
 
@@ -90,17 +131,17 @@ Opens on `http://localhost:5173`. It talks to the backend over
   a provider with a different shape (e.g. Anthropic's Messages API), adjust
   the `fetch` call and response parsing in `backend/server.js`.
 - `backend/shivam-ai.db` is created automatically on first run. Delete it
-  to wipe all history and start fresh. It's gitignored by default.
+  to wipe all history, facts, and documents and start fresh. It's
+  gitignored by default. Uploaded files are deleted from disk right after
+  their text is extracted — only the extracted chunks are kept in SQLite.
 
-## Next phases (from the original roadmap)
+## Next phase (from the original roadmap)
 
-- **Phase 3 — RAG**: upload PDFs/Word/Excel, embed and search them before
-  answering.
-- **Phase 4 — Tools**: let the assistant call functions (SQL queries, log
-  reads, report generation) via tool-calling.
 - **Phase 5 — Web search**: add a search tool for current information.
+  This slots in as one more entry in `getToolDefinitions()` /
+  `executeTool()` — same pattern as everything in Phase 4.
 
-Say the word and we'll build the next phase on top of this.
+Say the word and we'll build it.
 
 ## Deploying behind IIS
 

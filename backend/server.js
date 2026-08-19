@@ -23,6 +23,7 @@ import {
   addChunks,
 } from "./db.js";
 import { extractText, chunkText, searchChunks } from "./rag.js";
+import { getToolDefinitions, executeTool } from "./tools.js";
 
 dotenv.config();
 
@@ -182,7 +183,8 @@ app.post("/api/chat", async (req, res) => {
   const systemPrompt = {
     role: "system",
     content: [
-      "You are Friday AI, a helpful, concise personal assistant.",
+      "You are friday AI, a helpful, concise personal assistant.",
+      "You have tools available — use them when they'd give a more accurate answer than your own knowledge (math, current date/time, saving a fact, searching documents, querying the database). Don't narrate that you're using a tool, just use it and answer.",
       "If the user's uploaded documents contain the answer, prefer that over general knowledge and say which file it came from. If they don't, answer normally and say so.",
       factsBlock,
       docsBlock,
@@ -192,31 +194,78 @@ app.post("/api/chat", async (req, res) => {
   };
 
   const history = getMessages(sessionId); // includes the message just added
+  let workingMessages = [systemPrompt, ...history];
+  const tools = getToolDefinitions();
 
   try {
-    const upstream = await fetch(process.env.LLM_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.LLM_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: process.env.LLM_MODEL,
-        messages: [systemPrompt, ...history],
-        temperature: 0.7,
-      }),
-    });
+    let reply = "";
+    const toolLog = [];
+    const MAX_TOOL_ROUNDS = 5;
 
-    if (!upstream.ok) {
-      const errText = await upstream.text();
-      console.error("[friday-ai] Upstream LLM error:", upstream.status, errText);
-      return res.status(502).json({ error: "Upstream model provider returned an error.", detail: errText });
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const upstream = await fetch(process.env.LLM_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.LLM_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: process.env.LLM_MODEL,
+          messages: workingMessages,
+          tools,
+          tool_choice: "auto",
+          temperature: 0.7,
+        }),
+      });
+
+      if (!upstream.ok) {
+        const errText = await upstream.text();
+        console.error("[friday-ai] Upstream LLM error:", upstream.status, errText);
+        return res.status(502).json({ error: "Upstream model provider returned an error.", detail: errText });
+      }
+
+      const data = await upstream.json();
+      const assistantMsg = data?.choices?.[0]?.message;
+
+      if (!assistantMsg) {
+        return res.status(502).json({ error: "Upstream model provider returned an unexpected response shape." });
+      }
+
+      const toolCalls = assistantMsg.tool_calls;
+
+      if (!toolCalls || toolCalls.length === 0) {
+        // No more tool use — this is the final answer.
+        reply = assistantMsg.content ?? "";
+        break;
+      }
+
+      // Model wants to call one or more tools. Run them locally, feed the
+      // results back, and loop so it can respond (or call more tools).
+      workingMessages = [...workingMessages, assistantMsg];
+
+      for (const call of toolCalls) {
+        let args = {};
+        try {
+          args = JSON.parse(call.function.arguments || "{}");
+        } catch {
+          // malformed args from the model — pass an error back instead of crashing
+        }
+
+        console.log(`[friday-ai] Tool call: ${call.function.name}(${call.function.arguments})`);
+        const result = await executeTool(call.function.name, args);
+        toolLog.push({ name: call.function.name, args });
+
+        workingMessages.push({
+          role: "tool",
+          tool_call_id: call.id,
+          content: JSON.stringify(result),
+        });
+      }
+
+      if (round === MAX_TOOL_ROUNDS - 1) {
+        reply = "I made several tool calls but couldn't reach a final answer in time — try rephrasing or breaking the request into smaller steps.";
+      }
     }
-
-    const data = await upstream.json();
-
-    // OpenAI-compatible response shape. Adjust here if you switch providers.
-    const reply = data?.choices?.[0]?.message?.content ?? "";
 
     addMessage(sessionId, "assistant", reply);
 
@@ -226,7 +275,7 @@ app.post("/api/chat", async (req, res) => {
       renameSession(sessionId, message.slice(0, 60));
     }
 
-    return res.json({ reply });
+    return res.json({ reply, toolCalls: toolLog });
   } catch (err) {
     console.error("[friday-ai] /api/chat failed:", err);
     return res.status(500).json({ error: "Internal server error while contacting the model provider." });
