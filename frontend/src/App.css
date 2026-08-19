@@ -302,6 +302,14 @@
   color: #ff9a8f;
 }
 
+.tool-tag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--accent-2);
+  opacity: 0.75;
+  padding-left: 2px;
+}
+
 .cursor {
   display: inline-block;
   width: 8px;

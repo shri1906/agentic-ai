@@ -136,7 +136,10 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Request failed.");
 
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.reply, toolCalls: data.toolCalls || [] },
+      ]);
       refreshSessions(sessionId); // picks up auto-generated title / reordering
     } catch (err) {
       setError(err.message || "Something went wrong talking to the backend.");
@@ -210,14 +213,14 @@ export default function App() {
       <div className="shell">
         <header className="topbar">
           <span className={`status-dot${busy ? " busy" : ""}`} />
-          <span className="topbar-title">shivam@ai:~</span>
-          <span className="topbar-sub">phase 3 · rag</span>
+          <span className="topbar-title">Friday@ai:~</span>
+          <span className="topbar-sub">phase 4 · tools</span>
         </header>
 
         <main className="log" ref={logRef}>
           {messages.length === 0 && (
             <div className="log-empty">
-              <div className="big">Shivam AI</div>
+              <div className="big">Friday AI</div>
               type a message below to start a session.
               <br />
               history now persists across restarts.
@@ -226,14 +229,19 @@ export default function App() {
 
           {messages.map((m, i) => (
             <div key={i} className={`msg ${m.role}`}>
-              <span className="msg-role">{m.role === "user" ? "you" : "shivam"}</span>
+              <span className="msg-role">{m.role === "user" ? "you" : "Friday"}</span>
               <div className="msg-bubble">{m.content}</div>
+              {m.toolCalls?.length > 0 && (
+                <div className="tool-tag">
+                  used: {m.toolCalls.map((t) => t.name).join(", ")}
+                </div>
+              )}
             </div>
           ))}
 
           {busy && (
             <div className="msg assistant">
-              <span className="msg-role">shivam</span>
+              <span className="msg-role">Friday</span>
               <div className="msg-bubble">
                 thinking<span className="cursor" />
               </div>
@@ -253,7 +261,7 @@ export default function App() {
           <textarea
             rows={1}
             value={input}
-            placeholder="Ask Shivam AI anything..."
+            placeholder="Ask Friday AI anything..."
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={busy}
